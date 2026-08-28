@@ -29,4 +29,11 @@ export interface Config {
   POSTGRES_SYNCHRONIZE?: boolean;
   POSTGRES_LOGGING?: boolean;
   POSTGRES_MIGRATIONS_RUN?: boolean;
+
+  /**
+   * JWT & auth options
+   */
+  JWT_SECRET: string;
+  JWT_EXPIRES_IN?: string;
+  BCRYPT_SALT_ROUNDS?: number;
 }
