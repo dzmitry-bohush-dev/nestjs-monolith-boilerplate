@@ -6,6 +6,7 @@ import {
 import compression from '@fastify/compress';
 import fastifyCookie from '@fastify/cookie';
 import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import {
   initializeTransactionalContext,
   StorageDriver,
@@ -27,6 +28,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
+      transform: true,
     }),
   );
 
@@ -47,6 +49,13 @@ async function bootstrap() {
   await app.register(fastifyCookie, {
     secret: configService.get('COOKIE_SECRET'),
   });
+
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('API')
+    .addBearerAuth()
+    .build();
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, swaggerDocument);
 
   const port = configService.get('PORT');
 

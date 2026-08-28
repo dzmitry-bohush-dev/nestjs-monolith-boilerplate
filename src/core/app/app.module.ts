@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AuditLogModule } from '@/core/audit-log/audit-log.module';
 import { ConfigModule } from '@/core/config/config.module';
 import { DatabaseModule } from '@/core/database/database.module';
 import { HealthModule } from '@/core/health/health.module';
@@ -10,6 +11,7 @@ import { ThrottlerModule } from '@/core/throttler/throttler.module';
  * Application modules
  *
  */
+import { AuthModule } from '@/modules/auth/auth.module';
 import { UsersModule } from '@/modules/users/users.module';
 
 @Module({
@@ -18,12 +20,14 @@ import { UsersModule } from '@/modules/users/users.module';
     DatabaseModule,
     HealthModule,
     ThrottlerModule,
+    AuditLogModule,
     /**
      *
      * Application modules
      *
      */
     UsersModule,
+    AuthModule,
   ],
 })
 export class AppModule {}
