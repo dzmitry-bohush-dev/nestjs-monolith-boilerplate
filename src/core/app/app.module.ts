@@ -6,9 +6,9 @@ import { HealthModule } from '@/core/health/health.module';
 import { ThrottlerModule } from '@/core/throttler/throttler.module';
 
 /**
- * 
+ *
  * Application modules
- * 
+ *
  */
 import { UsersModule } from '@/modules/users/users.module';
 
@@ -19,9 +19,9 @@ import { UsersModule } from '@/modules/users/users.module';
     HealthModule,
     ThrottlerModule,
     /**
-     * 
+     *
      * Application modules
-     * 
+     *
      */
     UsersModule,
   ],
