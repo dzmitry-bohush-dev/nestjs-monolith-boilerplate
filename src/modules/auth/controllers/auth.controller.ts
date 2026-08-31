@@ -13,6 +13,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { FastifyRequest } from 'fastify';
 
 import { AuthResponseDto } from '@/modules/auth/dtos/auth-response.dto';
@@ -27,9 +28,10 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: HttpStatus.CREATED, type: AuthResponseDto })
-  @ApiConflictResponse({ description: 'Email is already registered' })
+  @ApiConflictResponse({ description: 'Invalid email or password' })
   register(
     @Body() dto: RegisterDto,
     @Req() request: FastifyRequest,

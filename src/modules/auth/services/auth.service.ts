@@ -33,7 +33,7 @@ export class AuthService {
     const existing = await this.usersService.findByEmail(dto.email);
 
     if (existing) {
-      throw new ConflictException('Email is already registered');
+      throw new ConflictException('Invalid email or password');
     }
 
     const saltRounds = Number(this.configService.get('BCRYPT_SALT_ROUNDS'));
