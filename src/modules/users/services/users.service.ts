@@ -15,6 +15,10 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { email } });
   }
 
+  findById(id: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { id } });
+  }
+
   create(email: string, passwordHash: string): Promise<User> {
     const user = this.usersRepository.create({ email, passwordHash });
 

@@ -59,6 +59,28 @@ describe('UsersService', () => {
     });
   });
 
+  describe('findById', () => {
+    it('returns the user when found', async () => {
+      const user = { id: '1', email: 'test@example.com' } as User;
+      repository.findOne.mockResolvedValue(user);
+
+      const result = await service.findById('1');
+
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: { id: '1' },
+      });
+      expect(result).toBe(user);
+    });
+
+    it('returns null when not found', async () => {
+      repository.findOne.mockResolvedValue(null);
+
+      const result = await service.findById('missing-id');
+
+      expect(result).toBeNull();
+    });
+  });
+
   describe('create', () => {
     it('creates and saves a new user', async () => {
       const created = {
