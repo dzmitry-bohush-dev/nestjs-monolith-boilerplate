@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { getStorageToken } from '@nestjs/throttler';
 import request from 'supertest';
 import { App } from 'supertest/types';
 
@@ -18,7 +19,18 @@ describe('Auth (e2e)', () => {
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(getStorageToken())
+      .useValue({
+        increment: () =>
+          Promise.resolve({
+            totalHits: 0,
+            timeToExpire: 0,
+            isBlocked: false,
+            timeToBlockExpire: 0,
+          }),
+      })
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(

@@ -1,3 +1,7 @@
+jest.mock('typeorm-transactional', () => ({
+  Transactional: () => () => undefined,
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException, NotFoundException } from '@nestjs/common';
@@ -80,8 +84,10 @@ describe('RolesService', () => {
       const result = await service.create(dto, mockUser);
 
       expect(result.name).toBe('admin');
-      expect(rbacCacheService.reload.bind(rbacCacheService)).toHaveBeenCalled();
-      expect(auditLogService.record.bind(auditLogService)).toHaveBeenCalledWith(
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(rbacCacheService.reload).toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(auditLogService.record).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: 'RBAC_ROLE_CREATED',
           userId: 'user-1',
@@ -114,7 +120,8 @@ describe('RolesService', () => {
       const result = await service.update('role-1', dto, mockUser);
 
       expect(result.description).toBe('Updated admin role');
-      expect(rbacCacheService.reload.bind(rbacCacheService)).toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(rbacCacheService.reload).toHaveBeenCalled();
     });
 
     it('should throw NotFoundException if role does not exist', async () => {
@@ -154,11 +161,12 @@ describe('RolesService', () => {
 
       await service.delete('role-1', mockUser);
 
-      expect(roleRepository.remove.bind(roleRepository)).toHaveBeenCalledWith(
-        mockRole,
-      );
-      expect(rbacCacheService.reload.bind(rbacCacheService)).toHaveBeenCalled();
-      expect(auditLogService.record.bind(auditLogService)).toHaveBeenCalledWith(
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(roleRepository.remove).toHaveBeenCalledWith(mockRole);
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(rbacCacheService.reload).toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(auditLogService.record).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: 'RBAC_ROLE_DELETED',
           userId: 'user-1',

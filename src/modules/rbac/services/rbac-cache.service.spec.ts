@@ -85,7 +85,7 @@ describe('RbacCacheService', () => {
       expect(auditLogService.record).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: 'RBAC_CACHE_RELOADED',
-          userId: null,
+          userId: undefined,
           metadata: { grantCount: 2, userRoleCount: 2 },
         }),
       );

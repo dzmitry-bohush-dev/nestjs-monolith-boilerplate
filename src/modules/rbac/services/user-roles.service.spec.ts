@@ -1,3 +1,7 @@
+jest.mock('typeorm-transactional', () => ({
+  Transactional: () => () => undefined,
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException, NotFoundException } from '@nestjs/common';
@@ -130,6 +134,7 @@ describe('UserRolesService', () => {
         eventType: 'RBAC_USER_ROLE_ASSIGNED',
         userId: 'actor-1',
         metadata: {
+          userRoleId: 'ur-1',
           targetUserId: 'user-1',
           roleId: 'role-1',
         },
@@ -190,6 +195,7 @@ describe('UserRolesService', () => {
         eventType: 'RBAC_USER_ROLE_REVOKED',
         userId: 'actor-1',
         metadata: {
+          userRoleId: 'ur-1',
           targetUserId: 'user-1',
           roleId: 'role-1',
         },

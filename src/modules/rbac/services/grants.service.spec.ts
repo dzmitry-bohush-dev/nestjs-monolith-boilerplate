@@ -1,3 +1,7 @@
+jest.mock('typeorm-transactional', () => ({
+  Transactional: () => () => undefined,
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
