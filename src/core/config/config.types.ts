@@ -36,4 +36,22 @@ export interface Config {
   JWT_SECRET: string;
   JWT_EXPIRES_IN?: string;
   BCRYPT_SALT_ROUNDS?: number;
+
+  /**
+   * Mailer options
+   */
+  MAIL_HOST?: string;
+  MAIL_PORT?: number;
+  MAIL_SECURE?: boolean;
+  MAIL_USER?: string;
+  MAIL_PASSWORD?: string;
+  MAIL_FROM?: string;
+
+  /**
+   * Login OTP options
+   */
+  LOGIN_OTP_LENGTH?: number;
+  LOGIN_OTP_TTL_MS?: number;
+  LOGIN_OTP_MAX_ATTEMPTS?: number;
+  LOGIN_OTP_RESEND_COOLDOWN_MS?: number;
 }

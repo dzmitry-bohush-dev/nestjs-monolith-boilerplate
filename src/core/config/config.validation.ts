@@ -40,4 +40,22 @@ export const configValidationSchema = Joi.object<Config>({
   JWT_SECRET: Joi.string().min(32).required(),
   JWT_EXPIRES_IN: Joi.string().optional().default('3600s'),
   BCRYPT_SALT_ROUNDS: Joi.number().optional().default(16),
+
+  /**
+   * Mailer options
+   */
+  MAIL_HOST: Joi.string().optional(),
+  MAIL_PORT: Joi.number().port().optional().default(587),
+  MAIL_SECURE: Joi.boolean().optional().default(false),
+  MAIL_USER: Joi.string().optional(),
+  MAIL_PASSWORD: Joi.string().optional(),
+  MAIL_FROM: Joi.string().optional().default('no-reply@example.com'),
+
+  /**
+   * Login OTP options
+   */
+  LOGIN_OTP_LENGTH: Joi.number().optional().default(6),
+  LOGIN_OTP_TTL_MS: Joi.number().optional().default(600000),
+  LOGIN_OTP_MAX_ATTEMPTS: Joi.number().optional().default(5),
+  LOGIN_OTP_RESEND_COOLDOWN_MS: Joi.number().optional().default(60000),
 });
