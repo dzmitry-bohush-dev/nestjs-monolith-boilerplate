@@ -80,7 +80,9 @@ export class LoginOtpService {
     );
   }
 
-  @Transactional()
+  // Not @Transactional(): a rejected/failed outcome still needs its
+  // save()/audit record to persist even though this method then throws,
+  // and @Transactional() would roll back everything written before the throw.
   async resend(
     attemptId: string,
     request?: FastifyRequest,
@@ -136,7 +138,7 @@ export class LoginOtpService {
     return LoginConfirmationPendingDto.from(saved, cooldownMs);
   }
 
-  @Transactional()
+  // See the comment on resend(): not @Transactional() for the same reason.
   async confirm(
     attemptId: string,
     otpCode: string,
