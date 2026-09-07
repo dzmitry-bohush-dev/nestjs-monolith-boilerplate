@@ -59,10 +59,10 @@ export class PendingLoginAttempt extends BaseEntity {
   confirmedAt?: Date | null;
 
   @ApiProperty({ required: false, nullable: true })
-  @Column({ name: 'ip_address', nullable: true })
+  @Column({ type: 'varchar', name: 'ip_address', nullable: true })
   ipAddress?: string | null;
 
   @ApiProperty({ required: false, nullable: true })
-  @Column({ name: 'user_agent', nullable: true })
+  @Column({ type: 'varchar', name: 'user_agent', nullable: true })
   userAgent?: string | null;
 }

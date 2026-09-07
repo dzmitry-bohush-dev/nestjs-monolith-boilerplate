@@ -18,6 +18,6 @@ export class ActionConfirmationSetting extends BaseEntity {
   confirmationMethod!: string;
 
   @ApiProperty({ format: 'uuid', required: false, nullable: true })
-  @Column({ name: 'updated_by_user_id', nullable: true })
+  @Column({ type: 'uuid', name: 'updated_by_user_id', nullable: true })
   updatedByUserId?: string | null;
 }
