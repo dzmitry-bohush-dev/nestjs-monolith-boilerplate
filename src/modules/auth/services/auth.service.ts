@@ -11,10 +11,18 @@ import { Transactional } from 'typeorm-transactional';
 import { AuditLogService } from '@/core/audit-log/audit-log.service';
 import { ConfigService } from '@/core/config/config.service';
 import { AuthResponseDto } from '@/modules/auth/dtos/auth-response.dto';
+import { ConfirmLoginDto } from '@/modules/auth/dtos/confirm-login.dto';
+import { LoginConfirmationPendingDto } from '@/modules/auth/dtos/login-confirmation-pending.dto';
+import { LoginResultDto } from '@/modules/auth/dtos/login-result.dto';
 import { LoginDto } from '@/modules/auth/dtos/login.dto';
 import { RegisterDto } from '@/modules/auth/dtos/register.dto';
+import { ResendLoginOtpDto } from '@/modules/auth/dtos/resend-login-otp.dto';
+import { LoginOtpService } from '@/modules/auth/services/login-otp.service';
 import { JwtPayload } from '@/modules/auth/types/jwt-payload.type';
+import { ActionConfirmationSettingsService } from '@/modules/settings/services/action-confirmation-settings.service';
 import { UsersService } from '@/modules/users/services/users.service';
+
+const LOGIN_CONFIRMATION_ACTION = 'auth.login';
 
 @Injectable()
 export class AuthService {
@@ -23,6 +31,8 @@ export class AuthService {
     private readonly auditLogService: AuditLogService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly actionConfirmationSettingsService: ActionConfirmationSettingsService,
+    private readonly loginOtpService: LoginOtpService,
   ) {}
 
   @Transactional()
@@ -57,12 +67,63 @@ export class AuthService {
   async login(
     dto: LoginDto,
     request?: FastifyRequest,
-  ): Promise<AuthResponseDto> {
+  ): Promise<LoginResultDto> {
     const user = await this.usersService.findByEmail(dto.email);
 
     if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
+      await this.auditLogService.record({
+        eventType: 'USER_LOGIN_FAILED',
+        email: dto.email,
+        request,
+      });
+
       throw new UnauthorizedException('Invalid email or password');
     }
+
+    const confirmationEnabled =
+      await this.actionConfirmationSettingsService.isEnabled(
+        LOGIN_CONFIRMATION_ACTION,
+      );
+
+    if (!confirmationEnabled) {
+      await this.auditLogService.record({
+        eventType: 'USER_LOGGED_IN',
+        userId: user.id,
+        email: user.email,
+        request,
+      });
+
+      return {
+        status: 'AUTHENTICATED',
+        body: AuthResponseDto.from({
+          accessToken: this.signToken({ sub: user.id, email: user.email }),
+          user,
+        }),
+      };
+    }
+
+    const pending = await this.loginOtpService.initiate(user, request);
+
+    await this.auditLogService.record({
+      eventType: 'LOGIN_CONFIRMATION_REQUIRED',
+      userId: user.id,
+      email: user.email,
+      request,
+      metadata: { attemptId: pending.attemptId },
+    });
+
+    return { status: 'CONFIRMATION_REQUIRED', body: pending };
+  }
+
+  async confirmLogin(
+    dto: ConfirmLoginDto,
+    request?: FastifyRequest,
+  ): Promise<AuthResponseDto> {
+    const user = await this.loginOtpService.confirm(
+      dto.attemptId,
+      dto.otpCode,
+      request,
+    );
 
     await this.auditLogService.record({
       eventType: 'USER_LOGGED_IN',
@@ -75,6 +136,13 @@ export class AuthService {
       accessToken: this.signToken({ sub: user.id, email: user.email }),
       user,
     });
+  }
+
+  async resendLoginOtp(
+    dto: ResendLoginOtpDto,
+    request?: FastifyRequest,
+  ): Promise<LoginConfirmationPendingDto> {
+    return this.loginOtpService.resend(dto.attemptId, request);
   }
 
   private signToken(payload: JwtPayload): string {
