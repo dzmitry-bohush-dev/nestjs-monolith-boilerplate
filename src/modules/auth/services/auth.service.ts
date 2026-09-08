@@ -47,7 +47,7 @@ export class AuthService {
   async register(
     dto: RegisterDto,
     request?: FastifyRequest,
-  ): Promise<AuthResponseDto> {
+  ): Promise<{ user: User; tokens: TokenPair }> {
     const existing = await this.usersService.findByEmail(dto.email);
 
     if (existing) {
@@ -66,10 +66,7 @@ export class AuthService {
       request,
     });
 
-    return AuthResponseDto.from({
-      accessToken: this.issueTokenPair(user).accessToken,
-      user,
-    });
+    return { user, tokens: this.issueTokenPair(user) };
   }
 
   async login(
@@ -103,10 +100,8 @@ export class AuthService {
 
       return {
         status: 'AUTHENTICATED',
-        body: AuthResponseDto.from({
-          accessToken: this.issueTokenPair(user).accessToken,
-          user,
-        }),
+        body: AuthResponseDto.from({ user }),
+        tokens: this.issueTokenPair(user),
       };
     }
 
@@ -126,7 +121,7 @@ export class AuthService {
   async confirmLogin(
     dto: ConfirmLoginDto,
     request?: FastifyRequest,
-  ): Promise<AuthResponseDto> {
+  ): Promise<{ user: User; tokens: TokenPair }> {
     const user = await this.loginOtpService.confirm(
       dto.attemptId,
       dto.otpCode,
@@ -140,10 +135,7 @@ export class AuthService {
       request,
     });
 
-    return AuthResponseDto.from({
-      accessToken: this.issueTokenPair(user).accessToken,
-      user,
-    });
+    return { user, tokens: this.issueTokenPair(user) };
   }
 
   async resendLoginOtp(

@@ -43,11 +43,16 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: HttpStatus.CREATED, type: AuthResponseDto })
   @ApiConflictResponse({ description: 'Invalid email or password' })
-  register(
+  async register(
     @Body() dto: RegisterDto,
     @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<AuthResponseDto> {
-    return this.authService.register(dto, request);
+    const { user, tokens } = await this.authService.register(dto, request);
+
+    this.authCookieService.setAuthCookies(reply, tokens);
+
+    return AuthResponseDto.from({ user });
   }
 
   @Post('login')
@@ -70,7 +75,11 @@ export class AuthController {
 
     if (result.status === 'CONFIRMATION_REQUIRED') {
       reply.status(HttpStatus.ACCEPTED);
+
+      return result.body;
     }
+
+    this.authCookieService.setAuthCookies(reply, result.tokens);
 
     return result.body;
   }
@@ -83,11 +92,16 @@ export class AuthController {
   @ApiUnauthorizedResponse({
     description: 'Invalid, expired, or already-used confirmation code',
   })
-  confirmLogin(
+  async confirmLogin(
     @Body() dto: ConfirmLoginDto,
     @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<AuthResponseDto> {
-    return this.authService.confirmLogin(dto, request);
+    const { user, tokens } = await this.authService.confirmLogin(dto, request);
+
+    this.authCookieService.setAuthCookies(reply, tokens);
+
+    return AuthResponseDto.from({ user });
   }
 
   @Post('login/resend')
@@ -121,7 +135,7 @@ export class AuthController {
 
     this.authCookieService.setAuthCookies(reply, tokens);
 
-    return AuthResponseDto.from({ accessToken: tokens.accessToken, user });
+    return AuthResponseDto.from({ user });
   }
 
   @Post('logout')
