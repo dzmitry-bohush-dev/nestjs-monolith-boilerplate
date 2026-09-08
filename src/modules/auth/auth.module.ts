@@ -11,6 +11,7 @@ import { MailerModule } from '@/core/mailer/mailer.module';
 import { AuthController } from '@/modules/auth/controllers/auth.controller';
 import { PendingLoginAttempt } from '@/modules/auth/entities/pending-login-attempt.entity';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
+import { AuthCookieService } from '@/modules/auth/services/auth-cookie.service';
 import { AuthService } from '@/modules/auth/services/auth.service';
 import { LoginOtpService } from '@/modules/auth/services/login-otp.service';
 import { JwtStrategy } from '@/modules/auth/strategies/jwt.strategy';
@@ -37,7 +38,13 @@ import { UsersModule } from '@/modules/users/users.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, LoginOtpService, JwtStrategy, JwtAuthGuard],
+  providers: [
+    AuthService,
+    AuthCookieService,
+    LoginOtpService,
+    JwtStrategy,
+    JwtAuthGuard,
+  ],
   exports: [JwtAuthGuard],
 })
 export class AuthModule {}
