@@ -124,10 +124,10 @@ describe('AuthService', () => {
         email: user.email,
         request: undefined,
       });
-      expect(jwtService.sign).toHaveBeenCalledWith({
-        sub: user.id,
-        email: user.email,
-      });
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        { sub: user.id, email: user.email, type: 'access' },
+        { secret: '16', expiresIn: '16', issuer: '16', audience: '16' },
+      );
       expect(result).toEqual({
         accessToken: 'access-token',
         user: { id: user.id, email: user.email },

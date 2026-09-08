@@ -6,6 +6,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import type { FastifyRequest } from 'fastify';
+import type { StringValue } from 'ms';
 import { Transactional } from 'typeorm-transactional';
 
 import { AuditLogService } from '@/core/audit-log/audit-log.service';
@@ -18,7 +19,10 @@ import { LoginDto } from '@/modules/auth/dtos/login.dto';
 import { RegisterDto } from '@/modules/auth/dtos/register.dto';
 import { ResendLoginOtpDto } from '@/modules/auth/dtos/resend-login-otp.dto';
 import { LoginOtpService } from '@/modules/auth/services/login-otp.service';
-import { JwtPayload } from '@/modules/auth/types/jwt-payload.type';
+import {
+  AccessTokenPayload,
+  RefreshTokenPayload,
+} from '@/modules/auth/types/jwt-payload.type';
 import { ActionConfirmationSettingsService } from '@/modules/settings/services/action-confirmation-settings.service';
 import { UsersService } from '@/modules/users/services/users.service';
 
@@ -59,7 +63,7 @@ export class AuthService {
     });
 
     return AuthResponseDto.from({
-      accessToken: this.signToken({ sub: user.id, email: user.email }),
+      accessToken: this.issueTokenPair(user).accessToken,
       user,
     });
   }
@@ -96,7 +100,7 @@ export class AuthService {
       return {
         status: 'AUTHENTICATED',
         body: AuthResponseDto.from({
-          accessToken: this.signToken({ sub: user.id, email: user.email }),
+          accessToken: this.issueTokenPair(user).accessToken,
           user,
         }),
       };
@@ -133,7 +137,7 @@ export class AuthService {
     });
 
     return AuthResponseDto.from({
-      accessToken: this.signToken({ sub: user.id, email: user.email }),
+      accessToken: this.issueTokenPair(user).accessToken,
       user,
     });
   }
@@ -145,7 +149,41 @@ export class AuthService {
     return this.loginOtpService.resend(dto.attemptId, request);
   }
 
-  private signToken(payload: JwtPayload): string {
-    return this.jwtService.sign(payload);
+  private signAccessToken(user: { id: string; email: string }): string {
+    const payload: AccessTokenPayload = {
+      sub: user.id,
+      email: user.email,
+      type: 'access',
+    };
+
+    return this.jwtService.sign(payload, {
+      secret: this.configService.get('JWT_SECRET'),
+      expiresIn: this.configService.get('JWT_ACCESS_EXPIRATION') as StringValue,
+      issuer: this.configService.get('JWT_ISSUER'),
+      audience: this.configService.get('JWT_AUDIENCE'),
+    });
+  }
+
+  private signRefreshToken(userId: string): string {
+    const payload: RefreshTokenPayload = { sub: userId, type: 'refresh' };
+
+    return this.jwtService.sign(payload, {
+      secret: this.configService.get('JWT_REFRESH_SECRET'),
+      expiresIn: this.configService.get(
+        'JWT_REFRESH_EXPIRATION',
+      ) as StringValue,
+      issuer: this.configService.get('JWT_ISSUER'),
+      audience: this.configService.get('JWT_AUDIENCE'),
+    });
+  }
+
+  private issueTokenPair(user: { id: string; email: string }): {
+    accessToken: string;
+    refreshToken: string;
+  } {
+    return {
+      accessToken: this.signAccessToken(user),
+      refreshToken: this.signRefreshToken(user.id),
+    };
   }
 }
