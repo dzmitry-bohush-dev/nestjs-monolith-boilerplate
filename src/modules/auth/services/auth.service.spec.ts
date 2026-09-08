@@ -25,7 +25,7 @@ describe('AuthService', () => {
   let service: AuthService;
   let usersService: { findByEmail: jest.Mock; create: jest.Mock };
   let auditLogService: { record: jest.Mock };
-  let jwtService: { sign: jest.Mock };
+  let jwtService: { sign: jest.Mock; decode: jest.Mock };
   let configService: { get: jest.Mock };
   let actionConfirmationSettingsService: { isEnabled: jest.Mock };
   let loginOtpService: {
@@ -61,7 +61,7 @@ describe('AuthService', () => {
         },
         {
           provide: JwtService,
-          useValue: { sign: jest.fn() },
+          useValue: { sign: jest.fn(), decode: jest.fn() },
         },
         {
           provide: ConfigService,
@@ -291,6 +291,71 @@ describe('AuthService', () => {
         undefined,
       );
       expect(result).toBe(pending);
+    });
+  });
+
+  describe('recordLogout', () => {
+    it('records USER_LOGGED_OUT with the userId decoded from the access token cookie', async () => {
+      const request = {
+        cookies: { access_token: 'access-token' },
+      } as unknown as Parameters<typeof service.recordLogout>[0];
+      jwtService.decode.mockReturnValue({ sub: user.id, type: 'access' });
+
+      await service.recordLogout(request);
+
+      expect(jwtService.decode).toHaveBeenCalledWith('access-token');
+      expect(auditLogService.record).toHaveBeenCalledWith({
+        eventType: 'USER_LOGGED_OUT',
+        userId: user.id,
+        request,
+      });
+    });
+
+    it('records an anonymous USER_LOGGED_OUT when there is no access token cookie', async () => {
+      const request = {
+        cookies: {},
+      } as unknown as Parameters<typeof service.recordLogout>[0];
+
+      await service.recordLogout(request);
+
+      expect(jwtService.decode).not.toHaveBeenCalled();
+      expect(auditLogService.record).toHaveBeenCalledWith({
+        eventType: 'USER_LOGGED_OUT',
+        userId: undefined,
+        request,
+      });
+    });
+
+    it('records an anonymous USER_LOGGED_OUT when the cookie fails to decode', async () => {
+      const request = {
+        cookies: { access_token: 'garbage' },
+      } as unknown as Parameters<typeof service.recordLogout>[0];
+      jwtService.decode.mockImplementation(() => {
+        throw new Error('malformed token');
+      });
+
+      await service.recordLogout(request);
+
+      expect(auditLogService.record).toHaveBeenCalledWith({
+        eventType: 'USER_LOGGED_OUT',
+        userId: undefined,
+        request,
+      });
+    });
+
+    it('records an anonymous USER_LOGGED_OUT when the decoded token is a refresh token', async () => {
+      const request = {
+        cookies: { access_token: 'refresh-token' },
+      } as unknown as Parameters<typeof service.recordLogout>[0];
+      jwtService.decode.mockReturnValue({ sub: user.id, type: 'refresh' });
+
+      await service.recordLogout(request);
+
+      expect(auditLogService.record).toHaveBeenCalledWith({
+        eventType: 'USER_LOGGED_OUT',
+        userId: undefined,
+        request,
+      });
     });
   });
 });

@@ -20,6 +20,7 @@ describe('AuthController', () => {
     confirmLogin: jest.Mock;
     resendLoginOtp: jest.Mock;
     refresh: jest.Mock;
+    recordLogout: jest.Mock;
   };
   let authCookieService: { setAuthCookies: jest.Mock };
 
@@ -53,6 +54,7 @@ describe('AuthController', () => {
             confirmLogin: jest.fn(),
             resendLoginOtp: jest.fn(),
             refresh: jest.fn(),
+            recordLogout: jest.fn(),
           },
         },
         {
@@ -175,6 +177,22 @@ describe('AuthController', () => {
         accessToken: tokens.accessToken,
         user,
       });
+    });
+  });
+
+  describe('logout', () => {
+    it('records the logout and clears auth cookies', async () => {
+      const reply = createReply();
+      authService.recordLogout.mockResolvedValue(undefined);
+
+      const result = await controller.logout(
+        request,
+        reply as unknown as FastifyReply,
+      );
+
+      expect(authService.recordLogout).toHaveBeenCalledWith(request);
+      expect(authCookieService.clearAuthCookies).toHaveBeenCalledWith(reply);
+      expect(result).toBeUndefined();
     });
   });
 });

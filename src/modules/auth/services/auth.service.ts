@@ -22,6 +22,7 @@ import { LoginOtpService } from '@/modules/auth/services/login-otp.service';
 import { TokenPair } from '@/modules/auth/services/auth-cookie.service';
 import {
   AccessTokenPayload,
+  DecodedAccessTokenPayload,
   DecodedRefreshTokenPayload,
   RefreshTokenPayload,
 } from '@/modules/auth/types/jwt-payload.type';
@@ -150,6 +151,32 @@ export class AuthService {
     request?: FastifyRequest,
   ): Promise<LoginConfirmationPendingDto> {
     return this.loginOtpService.resend(dto.attemptId, request);
+  }
+
+  async recordLogout(request: FastifyRequest): Promise<void> {
+    const userId = this.decodeAccessTokenUserId(request);
+
+    await this.auditLogService.record({
+      eventType: 'USER_LOGGED_OUT',
+      userId,
+      request,
+    });
+  }
+
+  private decodeAccessTokenUserId(request: FastifyRequest): string | undefined {
+    const cookie = request.cookies?.access_token;
+
+    if (!cookie) {
+      return undefined;
+    }
+
+    try {
+      const payload = this.jwtService.decode<DecodedAccessTokenPayload>(cookie);
+
+      return payload?.type === 'access' ? payload.sub : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   async refresh(

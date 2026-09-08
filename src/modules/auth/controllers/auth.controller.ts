@@ -123,4 +123,17 @@ export class AuthController {
 
     return AuthResponseDto.from({ accessToken: tokens.accessToken, user });
   }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Log out and clear auth cookies' })
+  @ApiResponse({ status: HttpStatus.NO_CONTENT })
+  async logout(
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<void> {
+    await this.authService.recordLogout(request);
+
+    this.authCookieService.clearAuthCookies(reply);
+  }
 }
