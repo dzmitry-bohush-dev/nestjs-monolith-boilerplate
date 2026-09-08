@@ -34,8 +34,19 @@ export interface Config {
    * JWT & auth options
    */
   JWT_SECRET: string;
-  JWT_EXPIRES_IN?: string;
+  JWT_ACCESS_EXPIRATION?: string;
+  JWT_REFRESH_SECRET: string;
+  JWT_REFRESH_EXPIRATION?: string;
+  JWT_ISSUER?: string;
+  JWT_AUDIENCE?: string;
   BCRYPT_SALT_ROUNDS?: number;
+
+  /**
+   * Cookie options
+   */
+  COOKIE_DOMAIN?: string;
+  COOKIE_SAME_SITE?: 'lax' | 'strict' | 'none';
+  COOKIE_SECURE?: boolean;
 
   /**
    * Mailer options

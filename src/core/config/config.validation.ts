@@ -38,8 +38,29 @@ export const configValidationSchema = Joi.object<Config>({
    * JWT & auth options
    */
   JWT_SECRET: Joi.string().min(32).required(),
-  JWT_EXPIRES_IN: Joi.string().optional().default('3600s'),
+  JWT_ACCESS_EXPIRATION: Joi.string().optional().default('15m'),
+  JWT_REFRESH_SECRET: Joi.string()
+    .min(32)
+    .required()
+    .invalid(Joi.ref('JWT_SECRET')),
+  JWT_REFRESH_EXPIRATION: Joi.string().optional().default('30d'),
+  JWT_ISSUER: Joi.string().optional(),
+  JWT_AUDIENCE: Joi.string().optional(),
   BCRYPT_SALT_ROUNDS: Joi.number().optional().default(16),
+
+  /**
+   * Cookie options
+   */
+  COOKIE_DOMAIN: Joi.string().optional(),
+  COOKIE_SAME_SITE: Joi.string()
+    .valid('lax', 'strict', 'none')
+    .optional()
+    .default('lax'),
+  COOKIE_SECURE: Joi.boolean().when('NODE_ENV', {
+    is: 'production',
+    then: Joi.boolean().default(true),
+    otherwise: Joi.boolean().default(false),
+  }),
 
   /**
    * Mailer options
