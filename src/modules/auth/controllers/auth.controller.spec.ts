@@ -9,6 +9,7 @@ import { LoginConfirmationPendingDto } from '@/modules/auth/dtos/login-confirmat
 import { LoginDto } from '@/modules/auth/dtos/login.dto';
 import { RegisterDto } from '@/modules/auth/dtos/register.dto';
 import { ResendLoginOtpDto } from '@/modules/auth/dtos/resend-login-otp.dto';
+import { AuthCookieService } from '@/modules/auth/services/auth-cookie.service';
 import { AuthService } from '@/modules/auth/services/auth.service';
 
 describe('AuthController', () => {
@@ -18,7 +19,9 @@ describe('AuthController', () => {
     login: jest.Mock;
     confirmLogin: jest.Mock;
     resendLoginOtp: jest.Mock;
+    refresh: jest.Mock;
   };
+  let authCookieService: { setAuthCookies: jest.Mock };
 
   const request = {} as FastifyRequest;
   const response: AuthResponseDto = {
@@ -49,6 +52,14 @@ describe('AuthController', () => {
             login: jest.fn(),
             confirmLogin: jest.fn(),
             resendLoginOtp: jest.fn(),
+            refresh: jest.fn(),
+          },
+        },
+        {
+          provide: AuthCookieService,
+          useValue: {
+            setAuthCookies: jest.fn(),
+            clearAuthCookies: jest.fn(),
           },
         },
       ],
@@ -56,6 +67,7 @@ describe('AuthController', () => {
 
     controller = module.get<AuthController>(AuthController);
     authService = module.get(AuthService);
+    authCookieService = module.get(AuthCookieService);
   });
 
   describe('register', () => {
@@ -139,6 +151,30 @@ describe('AuthController', () => {
 
       expect(authService.resendLoginOtp).toHaveBeenCalledWith(dto, request);
       expect(result).toBe(pending);
+    });
+  });
+
+  describe('refresh', () => {
+    it('sets new cookies and returns the user without tokens rotated in the body', async () => {
+      const reply = createReply();
+      const tokens = { accessToken: 'new-access', refreshToken: 'new-refresh' };
+      const user = { id: 'user-1', email: 'test@example.com' };
+      authService.refresh.mockResolvedValue({ user, tokens });
+
+      const result = await controller.refresh(
+        request,
+        reply as unknown as FastifyReply,
+      );
+
+      expect(authService.refresh).toHaveBeenCalledWith(request);
+      expect(authCookieService.setAuthCookies).toHaveBeenCalledWith(
+        reply,
+        tokens,
+      );
+      expect(result).toEqual({
+        accessToken: tokens.accessToken,
+        user,
+      });
     });
   });
 });

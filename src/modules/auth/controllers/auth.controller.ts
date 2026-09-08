@@ -24,6 +24,7 @@ import { LoginConfirmationPendingDto } from '@/modules/auth/dtos/login-confirmat
 import { LoginDto } from '@/modules/auth/dtos/login.dto';
 import { RegisterDto } from '@/modules/auth/dtos/register.dto';
 import { ResendLoginOtpDto } from '@/modules/auth/dtos/resend-login-otp.dto';
+import { AuthCookieService } from '@/modules/auth/services/auth-cookie.service';
 import { AuthService } from '@/modules/auth/services/auth.service';
 
 const LOGIN_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
@@ -31,7 +32,10 @@ const LOGIN_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly authCookieService: AuthCookieService,
+  ) {}
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
@@ -100,5 +104,23 @@ export class AuthController {
     @Req() request: FastifyRequest,
   ): Promise<LoginConfirmationPendingDto> {
     return this.authService.resendLoginOtp(dto, request);
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Rotate the access/refresh token pair' })
+  @ApiResponse({ status: HttpStatus.OK, type: AuthResponseDto })
+  @ApiUnauthorizedResponse({
+    description: 'Missing, expired, or invalid refresh token',
+  })
+  async refresh(
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<AuthResponseDto> {
+    const { user, tokens } = await this.authService.refresh(request);
+
+    this.authCookieService.setAuthCookies(reply, tokens);
+
+    return AuthResponseDto.from({ accessToken: tokens.accessToken, user });
   }
 }

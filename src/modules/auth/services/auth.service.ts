@@ -19,11 +19,14 @@ import { LoginDto } from '@/modules/auth/dtos/login.dto';
 import { RegisterDto } from '@/modules/auth/dtos/register.dto';
 import { ResendLoginOtpDto } from '@/modules/auth/dtos/resend-login-otp.dto';
 import { LoginOtpService } from '@/modules/auth/services/login-otp.service';
+import { TokenPair } from '@/modules/auth/services/auth-cookie.service';
 import {
   AccessTokenPayload,
+  DecodedRefreshTokenPayload,
   RefreshTokenPayload,
 } from '@/modules/auth/types/jwt-payload.type';
 import { ActionConfirmationSettingsService } from '@/modules/settings/services/action-confirmation-settings.service';
+import { User } from '@/modules/users/entities/user.entity';
 import { UsersService } from '@/modules/users/services/users.service';
 
 const LOGIN_CONFIRMATION_ACTION = 'auth.login';
@@ -147,6 +150,84 @@ export class AuthService {
     request?: FastifyRequest,
   ): Promise<LoginConfirmationPendingDto> {
     return this.loginOtpService.resend(dto.attemptId, request);
+  }
+
+  async refresh(
+    request: FastifyRequest,
+  ): Promise<{ user: User; tokens: TokenPair }> {
+    const cookie = request.cookies?.refresh_token;
+
+    if (!cookie) {
+      await this.auditLogService.record({
+        eventType: 'TOKEN_REFRESH_FAILED',
+        request,
+        metadata: { reason: 'missing_cookie' },
+      });
+
+      throw new UnauthorizedException();
+    }
+
+    let payload: DecodedRefreshTokenPayload;
+
+    try {
+      payload = await this.jwtService.verifyAsync<DecodedRefreshTokenPayload>(
+        cookie,
+        {
+          secret: this.configService.get('JWT_REFRESH_SECRET'),
+          issuer: this.configService.get('JWT_ISSUER'),
+          audience: this.configService.get('JWT_AUDIENCE'),
+        },
+      );
+    } catch (error) {
+      await this.auditLogService.record({
+        eventType: 'TOKEN_REFRESH_FAILED',
+        request,
+        metadata: { reason: this.refreshFailureReason(error) },
+      });
+
+      throw new UnauthorizedException();
+    }
+
+    if (payload.type !== 'refresh') {
+      await this.auditLogService.record({
+        eventType: 'TOKEN_REFRESH_FAILED',
+        request,
+        metadata: { reason: 'wrong_token_type' },
+      });
+
+      throw new UnauthorizedException();
+    }
+
+    const user = await this.usersService.findById(payload.sub);
+
+    if (!user) {
+      await this.auditLogService.record({
+        eventType: 'TOKEN_REFRESH_FAILED',
+        request,
+        metadata: { reason: 'user_not_found' },
+      });
+
+      throw new UnauthorizedException();
+    }
+
+    const tokens = this.issueTokenPair(user);
+
+    await this.auditLogService.record({
+      eventType: 'TOKEN_REFRESH_SUCCEEDED',
+      userId: user.id,
+      email: user.email,
+      request,
+    });
+
+    return { user, tokens };
+  }
+
+  private refreshFailureReason(error: unknown): string {
+    if (error instanceof Error && error.name === 'TokenExpiredError') {
+      return 'jwt_expired';
+    }
+
+    return 'invalid_signature';
   }
 
   private signAccessToken(user: { id: string; email: string }): string {
