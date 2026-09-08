@@ -22,13 +22,15 @@ describe('AuthController', () => {
     refresh: jest.Mock;
     recordLogout: jest.Mock;
   };
-  let authCookieService: { setAuthCookies: jest.Mock };
+  let authCookieService: {
+    setAuthCookies: jest.Mock;
+    clearAuthCookies: jest.Mock;
+  };
 
   const request = {} as FastifyRequest;
-  const response: AuthResponseDto = {
-    accessToken: 'access-token',
-    user: { id: 'user-1', email: 'test@example.com' },
-  };
+  const user = { id: 'user-1', email: 'test@example.com' };
+  const tokens = { accessToken: 'access-token', refreshToken: 'refresh-token' };
+  const responseBody: AuthResponseDto = AuthResponseDto.from({ user });
   const pending: LoginConfirmationPendingDto = {
     attemptId: 'attempt-1',
     confirmationMethod: 'otp',
@@ -73,17 +75,26 @@ describe('AuthController', () => {
   });
 
   describe('register', () => {
-    it('delegates to AuthService.register', async () => {
+    it('sets auth cookies and returns the user without tokens in the body', async () => {
+      const reply = createReply();
       const dto: RegisterDto = {
         email: 'test@example.com',
         password: 'p@ssw0rd123',
       };
-      authService.register.mockResolvedValue(response);
+      authService.register.mockResolvedValue({ user, tokens });
 
-      const result = await controller.register(dto, request);
+      const result = await controller.register(
+        dto,
+        request,
+        reply as unknown as FastifyReply,
+      );
 
       expect(authService.register).toHaveBeenCalledWith(dto, request);
-      expect(result).toBe(response);
+      expect(authCookieService.setAuthCookies).toHaveBeenCalledWith(
+        reply,
+        tokens,
+      );
+      expect(result).toEqual(responseBody);
     });
   });
 
@@ -93,11 +104,12 @@ describe('AuthController', () => {
       password: 'p@ssw0rd123',
     };
 
-    it('returns the body as-is and never sets a status when authenticated', async () => {
+    it('sets auth cookies and returns the body as-is when authenticated', async () => {
       const reply = createReply();
       authService.login.mockResolvedValue({
         status: 'AUTHENTICATED',
-        body: response,
+        body: responseBody,
+        tokens,
       });
 
       const result = await controller.login(
@@ -107,11 +119,15 @@ describe('AuthController', () => {
       );
 
       expect(authService.login).toHaveBeenCalledWith(dto, request);
+      expect(authCookieService.setAuthCookies).toHaveBeenCalledWith(
+        reply,
+        tokens,
+      );
       expect(reply.status).not.toHaveBeenCalled();
-      expect(result).toBe(response);
+      expect(result).toBe(responseBody);
     });
 
-    it('sets a 202 status and returns the pending body when confirmation is required', async () => {
+    it('sets a 202 status, skips cookies, and returns the pending body when confirmation is required', async () => {
       const reply = createReply();
       authService.login.mockResolvedValue({
         status: 'CONFIRMATION_REQUIRED',
@@ -125,22 +141,32 @@ describe('AuthController', () => {
       );
 
       expect(reply.status).toHaveBeenCalledWith(HttpStatus.ACCEPTED);
+      expect(authCookieService.setAuthCookies).not.toHaveBeenCalled();
       expect(result).toBe(pending);
     });
   });
 
   describe('confirmLogin', () => {
-    it('delegates to AuthService.confirmLogin', async () => {
+    it('sets auth cookies and returns the user without tokens in the body', async () => {
+      const reply = createReply();
       const dto: ConfirmLoginDto = {
         attemptId: 'attempt-1',
         otpCode: '123456',
       };
-      authService.confirmLogin.mockResolvedValue(response);
+      authService.confirmLogin.mockResolvedValue({ user, tokens });
 
-      const result = await controller.confirmLogin(dto, request);
+      const result = await controller.confirmLogin(
+        dto,
+        request,
+        reply as unknown as FastifyReply,
+      );
 
       expect(authService.confirmLogin).toHaveBeenCalledWith(dto, request);
-      expect(result).toBe(response);
+      expect(authCookieService.setAuthCookies).toHaveBeenCalledWith(
+        reply,
+        tokens,
+      );
+      expect(result).toEqual(responseBody);
     });
   });
 
@@ -157,10 +183,8 @@ describe('AuthController', () => {
   });
 
   describe('refresh', () => {
-    it('sets new cookies and returns the user without tokens rotated in the body', async () => {
+    it('sets rotated cookies and returns the user without tokens in the body', async () => {
       const reply = createReply();
-      const tokens = { accessToken: 'new-access', refreshToken: 'new-refresh' };
-      const user = { id: 'user-1', email: 'test@example.com' };
       authService.refresh.mockResolvedValue({ user, tokens });
 
       const result = await controller.refresh(
@@ -173,10 +197,7 @@ describe('AuthController', () => {
         reply,
         tokens,
       );
-      expect(result).toEqual({
-        accessToken: tokens.accessToken,
-        user,
-      });
+      expect(result).toEqual(responseBody);
     });
   });
 

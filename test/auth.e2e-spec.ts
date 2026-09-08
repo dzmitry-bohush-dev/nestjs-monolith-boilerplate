@@ -1,21 +1,23 @@
 import { randomUUID } from 'crypto';
 
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getStorageToken } from '@nestjs/throttler';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import request from 'supertest';
-import { App } from 'supertest/types';
 import { Repository } from 'typeorm';
 
+import { ConfigService } from '../src/core/config/config.service';
 import { MailerService } from '../src/core/mailer/mailer.service';
 import { AppModule } from '../src/core/app/app.module';
 import { Role } from '../src/modules/rbac/entities/role.entity';
 import { UserRole } from '../src/modules/rbac/entities/user-role.entity';
 import { RbacCacheService } from '../src/modules/rbac/services/rbac-cache.service';
+import { initFastifyTestApp } from './support/app';
+import { cookieHeaderFrom, cookieValue, findSetCookie } from './support/auth';
 
 interface AuthResponseBody {
-  accessToken: string;
   user: { id: string; email: string };
 }
 
@@ -32,10 +34,12 @@ interface SentOtpEmail {
 }
 
 describe('Auth (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: NestFastifyApplication;
   let roleRepository: Repository<Role>;
   let userRoleRepository: Repository<UserRole>;
   let rbacCacheService: RbacCacheService;
+  let jwtService: JwtService;
+  let configService: ConfigService;
 
   const sentOtpEmails: SentOtpEmail[] = [];
 
@@ -65,15 +69,13 @@ describe('Auth (e2e)', () => {
       })
       .compile();
 
-    app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, transform: true }),
-    );
-    await app.init();
+    app = await initFastifyTestApp(moduleFixture);
 
     roleRepository = moduleFixture.get(getRepositoryToken(Role));
     userRoleRepository = moduleFixture.get(getRepositoryToken(UserRole));
     rbacCacheService = moduleFixture.get(RbacCacheService);
+    jwtService = moduleFixture.get(JwtService);
+    configService = moduleFixture.get(ConfigService);
   });
 
   afterAll(async () => {
@@ -83,14 +85,11 @@ describe('Auth (e2e)', () => {
   const uniqueEmail = () => `e2e-${randomUUID()}@example.com`;
   const password = 'p@ssw0rd123';
 
-  const registerUser = async (email: string): Promise<AuthResponseBody> => {
-    const response = await request(app.getHttpServer())
+  const registerUser = (email: string) =>
+    request(app.getHttpServer())
       .post('/auth/register')
       .send({ email, password })
       .expect(201);
-
-    return response.body as AuthResponseBody;
-  };
 
   const latestOtpFor = (email: string): string => {
     const email_ = sentOtpEmails.filter((sent) => sent.to === email).pop();
@@ -103,7 +102,7 @@ describe('Auth (e2e)', () => {
   };
 
   describe('POST /auth/register', () => {
-    it('registers a new user and returns an access token', async () => {
+    it('registers a new user and sets access/refresh cookies', async () => {
       const email = uniqueEmail();
 
       const response = await request(app.getHttpServer())
@@ -113,19 +112,28 @@ describe('Auth (e2e)', () => {
 
       const body = response.body as AuthResponseBody;
 
-      expect(typeof body.accessToken).toBe('string');
       expect(typeof body.user.id).toBe('string');
       expect(body.user.email).toBe(email);
       expect(JSON.stringify(body)).not.toContain('passwordHash');
+      expect(JSON.stringify(body)).not.toContain('accessToken');
+
+      expect(cookieValue(response, 'access_token')).toBeTruthy();
+      expect(cookieValue(response, 'refresh_token')).toBeTruthy();
+
+      const setCookie = response.headers['set-cookie'] as unknown as string[];
+      const access = setCookie.find((c) => c.startsWith('access_token='));
+      const refresh = setCookie.find((c) => c.startsWith('refresh_token='));
+
+      expect(access).toContain('HttpOnly');
+      expect(access).toContain('Path=/');
+      expect(refresh).toContain('HttpOnly');
+      expect(refresh).toContain('Path=/auth');
     });
 
     it('rejects a duplicate email with 409', async () => {
       const email = uniqueEmail();
 
-      await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({ email, password })
-        .expect(201);
+      await registerUser(email);
 
       await request(app.getHttpServer())
         .post('/auth/register')
@@ -149,13 +157,10 @@ describe('Auth (e2e)', () => {
   });
 
   describe('POST /auth/login', () => {
-    it('logs in with correct credentials', async () => {
+    it('logs in with correct credentials and sets fresh cookies', async () => {
       const email = uniqueEmail();
 
-      await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({ email, password })
-        .expect(201);
+      await registerUser(email);
 
       const response = await request(app.getHttpServer())
         .post('/auth/login')
@@ -164,18 +169,16 @@ describe('Auth (e2e)', () => {
 
       const body = response.body as AuthResponseBody;
 
-      expect(typeof body.accessToken).toBe('string');
       expect(typeof body.user.id).toBe('string');
       expect(body.user.email).toBe(email);
+      expect(cookieValue(response, 'access_token')).toBeTruthy();
+      expect(cookieValue(response, 'refresh_token')).toBeTruthy();
     });
 
     it('rejects an incorrect password with 401', async () => {
       const email = uniqueEmail();
 
-      await request(app.getHttpServer())
-        .post('/auth/register')
-        .send({ email, password })
-        .expect(201);
+      await registerUser(email);
 
       await request(app.getHttpServer())
         .post('/auth/login')
@@ -192,12 +195,12 @@ describe('Auth (e2e)', () => {
   });
 
   describe('login with email confirmation enabled', () => {
-    let adminAccessToken: string;
+    let adminCookie: string;
 
     const setConfirmationEnabled = (enabled: boolean) =>
       request(app.getHttpServer())
         .put('/admin/settings/action-confirmations/auth.login')
-        .set('Authorization', `Bearer ${adminAccessToken}`)
+        .set('Cookie', adminCookie)
         .send({ enabled, confirmationMethod: 'otp' })
         .expect(200);
 
@@ -208,14 +211,15 @@ describe('Auth (e2e)', () => {
       const admin = await registerUser(
         `e2e-otp-admin-${randomUUID()}@example.com`,
       );
-      adminAccessToken = admin.accessToken;
+      adminCookie = cookieHeaderFrom(admin);
+      const adminBody = admin.body as AuthResponseBody;
 
       const adminRole = await roleRepository.findOneByOrFail({
         name: 'admin',
       });
       await userRoleRepository.save(
         userRoleRepository.create({
-          userId: admin.user.id,
+          userId: adminBody.user.id,
           roleId: adminRole.id,
         }),
       );
@@ -228,7 +232,7 @@ describe('Auth (e2e)', () => {
       await setConfirmationEnabled(false);
     });
 
-    it('returns 202 with a pending attempt instead of a token', async () => {
+    it('returns 202 with a pending attempt instead of tokens', async () => {
       const email = uniqueEmail();
       await registerUser(email);
 
@@ -244,6 +248,7 @@ describe('Auth (e2e)', () => {
       expect(body.expiresAt).toBeDefined();
       expect(body.resendAvailableAt).toBeDefined();
       expect(JSON.stringify(body)).not.toContain('accessToken');
+      expect(response.headers['set-cookie']).toBeUndefined();
     });
 
     it('completes the login via POST /auth/login/confirm with the emailed OTP', async () => {
@@ -264,8 +269,9 @@ describe('Auth (e2e)', () => {
 
       const body = confirmed.body as AuthResponseBody;
 
-      expect(typeof body.accessToken).toBe('string');
       expect(body.user.email).toBe(email);
+      expect(cookieValue(confirmed, 'access_token')).toBeTruthy();
+      expect(cookieValue(confirmed, 'refresh_token')).toBeTruthy();
     });
 
     it('rejects an incorrect OTP code with 401', async () => {
@@ -324,6 +330,97 @@ describe('Auth (e2e)', () => {
         .post('/auth/login/resend')
         .send({ attemptId })
         .expect(429);
+    });
+  });
+
+  describe('POST /auth/refresh', () => {
+    it('rotates the access/refresh cookies to genuinely new values', async () => {
+      const registered = await registerUser(uniqueEmail());
+
+      const oldAccess = cookieValue(registered, 'access_token');
+      const oldRefresh = cookieValue(registered, 'refresh_token');
+
+      const refreshed = await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', cookieHeaderFrom(registered))
+        .expect(200);
+
+      const newAccess = cookieValue(refreshed, 'access_token');
+      const newRefresh = cookieValue(refreshed, 'refresh_token');
+
+      expect(newAccess).toBeTruthy();
+      expect(newRefresh).toBeTruthy();
+      expect(newAccess).not.toBe(oldAccess);
+      expect(newRefresh).not.toBe(oldRefresh);
+
+      const registeredBody = registered.body as AuthResponseBody;
+      const refreshedBody = refreshed.body as AuthResponseBody;
+      expect(refreshedBody.user.id).toBe(registeredBody.user.id);
+      expect(JSON.stringify(refreshedBody)).not.toContain('accessToken');
+    });
+
+    it('rejects a missing refresh cookie with 401', async () => {
+      await request(app.getHttpServer()).post('/auth/refresh').expect(401);
+    });
+
+    it('rejects an expired refresh cookie with 401', async () => {
+      const registered = await registerUser(uniqueEmail());
+      const { user } = registered.body as AuthResponseBody;
+
+      const expiredRefreshToken = jwtService.sign(
+        { sub: user.id, type: 'refresh' },
+        {
+          secret: configService.get('JWT_REFRESH_SECRET'),
+          expiresIn: '-1s',
+        },
+      );
+
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', `refresh_token=${expiredRefreshToken}`)
+        .expect(401);
+    });
+
+    it('rejects a refresh cookie with an invalid signature with 401', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', 'refresh_token=not-a-valid-jwt')
+        .expect(401);
+    });
+
+    it('rejects an access token used as a refresh cookie with 401', async () => {
+      const registered = await registerUser(uniqueEmail());
+      const accessToken = cookieValue(registered, 'access_token');
+
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', `refresh_token=${accessToken}`)
+        .expect(401);
+    });
+  });
+
+  describe('POST /auth/logout', () => {
+    it('clears both cookies and returns 204 even with no prior auth', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/auth/logout')
+        .expect(204);
+
+      expect(findSetCookie(response, 'access_token')).toBeDefined();
+      expect(findSetCookie(response, 'refresh_token')).toBeDefined();
+    });
+
+    it('clears cookies so a subsequent protected request 401s', async () => {
+      const registered = await registerUser(uniqueEmail());
+
+      const loggedOut = await request(app.getHttpServer())
+        .post('/auth/logout')
+        .set('Cookie', cookieHeaderFrom(registered))
+        .expect(204);
+
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', cookieHeaderFrom(loggedOut))
+        .expect(401);
     });
   });
 });

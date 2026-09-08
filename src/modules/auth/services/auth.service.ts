@@ -256,25 +256,48 @@ export class AuthService {
       type: 'access',
     };
 
-    return this.jwtService.sign(payload, {
-      secret: this.configService.get('JWT_SECRET'),
-      expiresIn: this.configService.get('JWT_ACCESS_EXPIRATION') as StringValue,
-      issuer: this.configService.get('JWT_ISSUER'),
-      audience: this.configService.get('JWT_AUDIENCE'),
-    });
+    return this.jwtService.sign(
+      payload,
+      this.signOptions(
+        this.configService.get('JWT_SECRET'),
+        this.configService.get('JWT_ACCESS_EXPIRATION') as StringValue,
+      ),
+    );
   }
 
   private signRefreshToken(userId: string): string {
     const payload: RefreshTokenPayload = { sub: userId, type: 'refresh' };
 
-    return this.jwtService.sign(payload, {
-      secret: this.configService.get('JWT_REFRESH_SECRET'),
-      expiresIn: this.configService.get(
-        'JWT_REFRESH_EXPIRATION',
-      ) as StringValue,
-      issuer: this.configService.get('JWT_ISSUER'),
-      audience: this.configService.get('JWT_AUDIENCE'),
-    });
+    return this.jwtService.sign(
+      payload,
+      this.signOptions(
+        this.configService.get('JWT_REFRESH_SECRET'),
+        this.configService.get('JWT_REFRESH_EXPIRATION') as StringValue,
+      ),
+    );
+  }
+
+  // jsonwebtoken's sign() rejects `issuer`/`audience` keys that are present
+  // but `undefined` (they're optional config), so omit them entirely rather
+  // than passing `undefined` through.
+  private signOptions(
+    secret: string,
+    expiresIn: StringValue,
+  ): {
+    secret: string;
+    expiresIn: StringValue;
+    issuer?: string;
+    audience?: string;
+  } {
+    const issuer = this.configService.get('JWT_ISSUER');
+    const audience = this.configService.get('JWT_AUDIENCE');
+
+    return {
+      secret,
+      expiresIn,
+      ...(issuer ? { issuer } : {}),
+      ...(audience ? { audience } : {}),
+    };
   }
 
   private issueTokenPair(user: { id: string; email: string }): {

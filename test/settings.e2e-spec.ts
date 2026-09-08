@@ -1,20 +1,20 @@
 import { randomUUID } from 'crypto';
 
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getStorageToken } from '@nestjs/throttler';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import request from 'supertest';
-import { App } from 'supertest/types';
 import { Repository } from 'typeorm';
 
 import { AppModule } from '../src/core/app/app.module';
 import { Role } from '../src/modules/rbac/entities/role.entity';
 import { UserRole } from '../src/modules/rbac/entities/user-role.entity';
 import { RbacCacheService } from '../src/modules/rbac/services/rbac-cache.service';
+import { initFastifyTestApp } from './support/app';
+import { cookieHeaderFrom } from './support/auth';
 
 interface AuthResponseBody {
-  accessToken: string;
   user: { id: string; email: string };
 }
 
@@ -25,30 +25,25 @@ interface ActionConfirmationSettingBody {
 }
 
 describe('Settings (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: NestFastifyApplication;
   let roleRepository: Repository<Role>;
   let userRoleRepository: Repository<UserRole>;
   let rbacCacheService: RbacCacheService;
 
-  let adminAccessToken: string;
+  let adminCookie: string;
 
   const password = 'p@ssw0rd123';
   const uniqueEmail = (label: string) =>
     `e2e-settings-${label}-${randomUUID()}@example.com`;
 
-  const registerUser = async (email: string): Promise<AuthResponseBody> => {
-    const response = await request(app.getHttpServer())
+  const registerUser = (email: string) =>
+    request(app.getHttpServer())
       .post('/auth/register')
       .send({ email, password })
       .expect(201);
 
-    return response.body as AuthResponseBody;
-  };
-
   const authed = (method: 'get' | 'put', url: string) =>
-    request(app.getHttpServer())
-      [method](url)
-      .set('Authorization', `Bearer ${adminAccessToken}`);
+    request(app.getHttpServer())[method](url).set('Cookie', adminCookie);
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -66,11 +61,7 @@ describe('Settings (e2e)', () => {
       })
       .compile();
 
-    app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, transform: true }),
-    );
-    await app.init();
+    app = await initFastifyTestApp(moduleFixture);
 
     roleRepository = moduleFixture.get(getRepositoryToken(Role));
     userRoleRepository = moduleFixture.get(getRepositoryToken(UserRole));
@@ -80,12 +71,13 @@ describe('Settings (e2e)', () => {
     // seed-migration `admin` role directly (no self-serve bootstrap endpoint),
     // then reload the cache to mimic the documented restart.
     const admin = await registerUser(uniqueEmail('admin'));
-    adminAccessToken = admin.accessToken;
+    adminCookie = cookieHeaderFrom(admin);
+    const adminBody = admin.body as AuthResponseBody;
 
     const adminRole = await roleRepository.findOneByOrFail({ name: 'admin' });
     await userRoleRepository.save(
       userRoleRepository.create({
-        userId: admin.user.id,
+        userId: adminBody.user.id,
         roleId: adminRole.id,
       }),
     );
@@ -102,7 +94,7 @@ describe('Settings (e2e)', () => {
   });
 
   describe('authentication and authorization', () => {
-    it('rejects requests with no bearer token with 401', async () => {
+    it('rejects requests with no access cookie with 401', async () => {
       await request(app.getHttpServer())
         .get('/admin/settings/action-confirmations')
         .expect(401);
@@ -113,7 +105,7 @@ describe('Settings (e2e)', () => {
 
       await request(app.getHttpServer())
         .get('/admin/settings/action-confirmations')
-        .set('Authorization', `Bearer ${plainUser.accessToken}`)
+        .set('Cookie', cookieHeaderFrom(plainUser))
         .expect(403);
     });
   });
