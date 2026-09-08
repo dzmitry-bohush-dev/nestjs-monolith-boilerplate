@@ -9,4 +9,7 @@ export class User extends BaseEntity {
 
   @Column({ name: 'password_hash' })
   passwordHash!: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  photo!: string | null;
 }

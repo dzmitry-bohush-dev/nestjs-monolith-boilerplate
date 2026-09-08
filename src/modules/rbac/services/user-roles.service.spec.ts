@@ -35,6 +35,7 @@ describe('UserRolesService', () => {
     id: 'user-1',
     email: 'user@example.com',
     passwordHash: 'hashed_password',
+    photo: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
