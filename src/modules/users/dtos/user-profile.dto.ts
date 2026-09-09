@@ -12,11 +12,19 @@ export class UserProfileDto {
   @ApiProperty({ type: String, nullable: true })
   photo!: string | null;
 
+  @ApiProperty({ type: String, nullable: true })
+  firstName!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  lastName!: string | null;
+
   static from(user: User): UserProfileDto {
     const dto = new UserProfileDto();
     dto.id = user.id;
     dto.email = user.email;
     dto.photo = user.photo;
+    dto.firstName = user.firstName;
+    dto.lastName = user.lastName;
     return dto;
   }
 }
