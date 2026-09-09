@@ -4,6 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { Reflector } from '@nestjs/core';
+
 import { AuditLogService } from '@/core/audit-log/audit-log.service';
 import { AuditLog } from '@/core/audit-log/entities/audit-log.entity';
 import type { AuthenticatedUser } from '@/modules/auth/types/jwt-payload.type';
@@ -14,6 +16,7 @@ import { UsersService } from '@/modules/users/services/users.service';
 
 describe('UserProfileAccessGuard', () => {
   let guard: UserProfileAccessGuard;
+  let reflector: Partial<jest.Mocked<Reflector>>;
   let usersService: Partial<jest.Mocked<UsersService>>;
   let rbacCacheService: Partial<jest.Mocked<RbacCacheService>>;
   let auditLogService: Partial<jest.Mocked<AuditLogService>>;
@@ -30,11 +33,13 @@ describe('UserProfileAccessGuard', () => {
   });
 
   beforeEach(() => {
+    reflector = { getAllAndOverride: jest.fn().mockReturnValue(undefined) };
     usersService = { findById: jest.fn() };
     rbacCacheService = { hasPermission: jest.fn() };
     auditLogService = { record: jest.fn().mockResolvedValue(mockAuditLog) };
 
     guard = new UserProfileAccessGuard(
+      reflector as unknown as Reflector,
       usersService as unknown as UsersService,
       rbacCacheService as unknown as RbacCacheService,
       auditLogService as unknown as AuditLogService,
@@ -50,6 +55,8 @@ describe('UserProfileAccessGuard', () => {
       switchToHttp: jest.fn().mockReturnValue({
         getRequest: jest.fn().mockReturnValue(request),
       }),
+      getHandler: jest.fn(),
+      getClass: jest.fn(),
     } as unknown as ExecutionContext;
 
     return { context, request };

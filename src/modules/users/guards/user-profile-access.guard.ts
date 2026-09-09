@@ -5,25 +5,39 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { FastifyRequest } from 'fastify';
 
 import { AuditLogService } from '@/core/audit-log/audit-log.service';
 import { AuthenticatedUser } from '@/modules/auth/types/jwt-payload.type';
+import { ProfileAccessMetadata } from '@/modules/users/decorators/check-profile-access.decorator';
 import { User } from '@/modules/users/entities/user.entity';
 import { RbacCacheService } from '@/modules/rbac/services/rbac-cache.service';
 import { UsersService } from '@/modules/users/services/users.service';
 
 export type ProfileAccessType = 'self' | 'permission';
 
+const DEFAULT_PROFILE_ACCESS_METADATA: ProfileAccessMetadata = {
+  permission: 'users',
+  action: 'read',
+};
+
 @Injectable()
 export class UserProfileAccessGuard implements CanActivate {
   constructor(
+    private readonly reflector: Reflector,
     private readonly usersService: UsersService,
     private readonly rbacCacheService: RbacCacheService,
     private readonly auditLogService: AuditLogService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const { permission, action } =
+      this.reflector.getAllAndOverride<ProfileAccessMetadata>(
+        'profile:access',
+        [context.getHandler(), context.getClass()],
+      ) ?? DEFAULT_PROFILE_ACCESS_METADATA;
+
     const request = context.switchToHttp().getRequest<
       FastifyRequest & {
         user?: AuthenticatedUser;
@@ -60,8 +74,8 @@ export class UserProfileAccessGuard implements CanActivate {
 
     const hasPermission = this.rbacCacheService.hasPermission(
       currentUser.userId,
-      'users',
-      'read',
+      permission,
+      action,
     );
 
     if (!hasPermission) {

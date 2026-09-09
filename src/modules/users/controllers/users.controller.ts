@@ -14,6 +14,7 @@ import type { FastifyRequest } from 'fastify';
 import { AuditLogService } from '@/core/audit-log/audit-log.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '@/modules/auth/types/jwt-payload.type';
+import { CheckProfileAccess } from '@/modules/users/decorators/check-profile-access.decorator';
 import { UserProfileDto } from '@/modules/users/dtos/user-profile.dto';
 import { User } from '@/modules/users/entities/user.entity';
 import {
@@ -36,6 +37,7 @@ export class UsersController {
 
   @Get(':userId')
   @UseGuards(UserProfileAccessGuard)
+  @CheckProfileAccess('users', 'read')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: 'Get a user profile' })
   @ApiResponse({ status: 200, type: UserProfileDto })
