@@ -3,6 +3,7 @@ import * as nodemailer from 'nodemailer';
 
 import { ConfigService } from '@/core/config/config.service';
 import { MAIL_TRANSPORT } from '@/core/mailer/mailer.constants';
+import { renderAccountDeletionOtpEmail } from '@/core/mailer/templates/account-deletion-otp.template';
 import { renderEmailChangeOtpEmail } from '@/core/mailer/templates/email-change-otp.template';
 import { renderLoginOtpEmail } from '@/core/mailer/templates/login-otp.template';
 
@@ -55,6 +56,20 @@ export class MailerService {
       code,
       ttlMinutes,
       newEmail,
+    );
+
+    return this.sendMail({ to, subject, text, html });
+  }
+
+  sendAccountDeletionOtpEmail(params: {
+    to: string;
+    code: string;
+    ttlMinutes: number;
+  }): Promise<unknown> {
+    const { to, code, ttlMinutes } = params;
+    const { subject, text, html } = renderAccountDeletionOtpEmail(
+      code,
+      ttlMinutes,
     );
 
     return this.sendMail({ to, subject, text, html });

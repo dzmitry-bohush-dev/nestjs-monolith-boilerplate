@@ -38,6 +38,8 @@ describe('UserRolesService', () => {
     photo: null,
     firstName: null,
     lastName: null,
+    status: 'ACTIVE',
+    deletedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

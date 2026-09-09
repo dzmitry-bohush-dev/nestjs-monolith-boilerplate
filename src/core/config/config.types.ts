@@ -73,4 +73,12 @@ export interface Config {
   EMAIL_CHANGE_OTP_TTL_MS?: number;
   EMAIL_CHANGE_OTP_MAX_ATTEMPTS?: number;
   EMAIL_CHANGE_OTP_RESEND_COOLDOWN_MS?: number;
+
+  /**
+   * Account deletion OTP options
+   */
+  ACCOUNT_DELETION_OTP_LENGTH?: number;
+  ACCOUNT_DELETION_OTP_TTL_MS?: number;
+  ACCOUNT_DELETION_OTP_MAX_ATTEMPTS?: number;
+  ACCOUNT_DELETION_OTP_RESEND_COOLDOWN_MS?: number;
 }

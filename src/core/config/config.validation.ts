@@ -87,4 +87,14 @@ export const configValidationSchema = Joi.object<Config>({
   EMAIL_CHANGE_OTP_TTL_MS: Joi.number().optional().default(600000),
   EMAIL_CHANGE_OTP_MAX_ATTEMPTS: Joi.number().optional().default(5),
   EMAIL_CHANGE_OTP_RESEND_COOLDOWN_MS: Joi.number().optional().default(60000),
+
+  /**
+   * Account deletion OTP options
+   */
+  ACCOUNT_DELETION_OTP_LENGTH: Joi.number().optional().default(6),
+  ACCOUNT_DELETION_OTP_TTL_MS: Joi.number().optional().default(600000),
+  ACCOUNT_DELETION_OTP_MAX_ATTEMPTS: Joi.number().optional().default(5),
+  ACCOUNT_DELETION_OTP_RESEND_COOLDOWN_MS: Joi.number()
+    .optional()
+    .default(60000),
 });

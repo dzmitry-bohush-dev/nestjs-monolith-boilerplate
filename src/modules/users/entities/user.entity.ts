@@ -18,4 +18,10 @@ export class User extends BaseEntity {
 
   @Column({ type: 'varchar', name: 'last_name', nullable: true })
   lastName!: string | null;
+
+  @Column({ type: 'varchar', default: 'ACTIVE' })
+  status!: 'ACTIVE' | 'DELETED';
+
+  @Column({ type: 'timestamptz', name: 'deleted_at', nullable: true })
+  deletedAt!: Date | null;
 }
