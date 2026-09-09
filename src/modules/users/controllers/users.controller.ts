@@ -224,6 +224,7 @@ export class UsersController {
   @Post(':userId/deletion/confirm')
   @UseGuards(SelfOnlyGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Confirm a pending account deletion with an OTP code',
   })
