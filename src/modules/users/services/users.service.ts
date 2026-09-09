@@ -4,7 +4,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 
 import { UpdateUserDto } from '@/modules/users/dtos/update-user.dto';
 import { User } from '@/modules/users/entities/user.entity';
@@ -18,11 +18,15 @@ export class UsersService {
   ) {}
 
   findByEmail(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { email } });
+    return this.usersRepository.findOne({
+      where: { email, status: Not('DELETED') },
+    });
   }
 
   findById(id: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { id } });
+    return this.usersRepository.findOne({
+      where: { id, status: Not('DELETED') },
+    });
   }
 
   create(email: string, passwordHash: string): Promise<User> {

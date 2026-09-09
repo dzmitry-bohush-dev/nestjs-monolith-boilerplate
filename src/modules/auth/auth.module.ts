@@ -45,6 +45,6 @@ import { UsersModule } from '@/modules/users/users.module';
     JwtStrategy,
     JwtAuthGuard,
   ],
-  exports: [JwtAuthGuard],
+  exports: [JwtAuthGuard, AuthCookieService],
 })
 export class AuthModule {}

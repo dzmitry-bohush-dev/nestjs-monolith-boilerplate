@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { Not } from 'typeorm';
 
 import { UpdateUserDto } from '@/modules/users/dtos/update-user.dto';
 import { User } from '@/modules/users/entities/user.entity';
@@ -47,7 +48,7 @@ describe('UsersService', () => {
       const result = await service.findByEmail('test@example.com');
 
       expect(repository.findOne).toHaveBeenCalledWith({
-        where: { email: 'test@example.com' },
+        where: { email: 'test@example.com', status: Not('DELETED') },
       });
       expect(result).toBe(user);
     });
@@ -69,7 +70,7 @@ describe('UsersService', () => {
       const result = await service.findById('1');
 
       expect(repository.findOne).toHaveBeenCalledWith({
-        where: { id: '1' },
+        where: { id: '1', status: Not('DELETED') },
       });
       expect(result).toBe(user);
     });
@@ -153,7 +154,7 @@ describe('UsersService', () => {
       const result = await service.update(targetUser, patch, 'permission');
 
       expect(repository.findOne).toHaveBeenCalledWith({
-        where: { email: 'new@example.com' },
+        where: { email: 'new@example.com', status: Not('DELETED') },
       });
       expect(repository.save).toHaveBeenCalledWith(
         expect.objectContaining(patch),

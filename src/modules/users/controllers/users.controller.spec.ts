@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import type { FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { AuditLogService } from '@/core/audit-log/audit-log.service';
+import { AuthCookieService } from '@/modules/auth/services/auth-cookie.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '@/modules/auth/types/jwt-payload.type';
 import { UsersController } from '@/modules/users/controllers/users.controller';
@@ -10,6 +11,7 @@ import { User } from '@/modules/users/entities/user.entity';
 import { SelfOnlyGuard } from '@/modules/users/guards/self-only.guard';
 import { UserProfileAccessGuard } from '@/modules/users/guards/user-profile-access.guard';
 import { EmailChangeService } from '@/modules/users/services/email-change.service';
+import { UserDeletionService } from '@/modules/users/services/user-deletion.service';
 import { UsersService } from '@/modules/users/services/users.service';
 
 describe('UsersController', () => {
@@ -17,6 +19,12 @@ describe('UsersController', () => {
   let auditLogService: { record: jest.Mock };
   let usersService: { findById: jest.Mock; update: jest.Mock };
   let emailChangeService: { initiate: jest.Mock; confirm: jest.Mock };
+  let userDeletionService: {
+    initiateSelfDeletion: jest.Mock;
+    adminDelete: jest.Mock;
+    confirmSelfDeletion: jest.Mock;
+  };
+  let authCookieService: { clearAuthCookies: jest.Mock };
 
   const currentUser: AuthenticatedUser = {
     userId: 'user-1',
@@ -40,6 +48,18 @@ describe('UsersController', () => {
           provide: EmailChangeService,
           useValue: { initiate: jest.fn(), confirm: jest.fn() },
         },
+        {
+          provide: UserDeletionService,
+          useValue: {
+            initiateSelfDeletion: jest.fn(),
+            adminDelete: jest.fn(),
+            confirmSelfDeletion: jest.fn(),
+          },
+        },
+        {
+          provide: AuthCookieService,
+          useValue: { clearAuthCookies: jest.fn() },
+        },
         { provide: AuditLogService, useValue: { record: jest.fn() } },
       ],
     })
@@ -55,6 +75,8 @@ describe('UsersController', () => {
     auditLogService = module.get(AuditLogService);
     usersService = module.get(UsersService);
     emailChangeService = module.get(EmailChangeService);
+    userDeletionService = module.get(UserDeletionService);
+    authCookieService = module.get(AuthCookieService);
   });
 
   describe('getProfile', () => {
@@ -241,6 +263,110 @@ describe('UsersController', () => {
       expect(result).toEqual({
         id: 'user-1',
         email: 'new@example.com',
+        photo: null,
+      });
+    });
+  });
+
+  describe('initiateDeletion', () => {
+    it('initiates self-deletion, returns 202, and returns the pending challenge', async () => {
+      const pending = { challengeId: 'challenge-1' };
+      userDeletionService.initiateSelfDeletion.mockResolvedValue(pending);
+      const dto = { reason: 'no longer needed' };
+      const request = {
+        targetUser,
+        profileAccessType: 'self',
+      } as unknown as FastifyRequest & {
+        targetUser: User;
+        profileAccessType: 'self' | 'permission';
+      };
+      const reply = { status: jest.fn() };
+
+      const result = await controller.initiateDeletion(
+        dto,
+        currentUser,
+        request,
+        reply as unknown as FastifyReply,
+      );
+
+      expect(reply.status).toHaveBeenCalledWith(202);
+      expect(userDeletionService.initiateSelfDeletion).toHaveBeenCalledWith(
+        targetUser,
+        'no longer needed',
+        request,
+      );
+      expect(userDeletionService.adminDelete).not.toHaveBeenCalled();
+      expect(result).toBe(pending);
+    });
+
+    it('deletes immediately as admin and returns the anonymized profile', async () => {
+      const deletedUser = {
+        id: 'user-2',
+        email: 'deleted-user-2@deleted.invalid',
+        photo: null,
+      } as User;
+      userDeletionService.adminDelete.mockResolvedValue(deletedUser);
+      const dto = {};
+      const request = {
+        targetUser,
+        profileAccessType: 'permission',
+      } as unknown as FastifyRequest & {
+        targetUser: User;
+        profileAccessType: 'self' | 'permission';
+      };
+      const reply = { status: jest.fn() };
+
+      const result = await controller.initiateDeletion(
+        dto,
+        currentUser,
+        request,
+        reply as unknown as FastifyReply,
+      );
+
+      expect(reply.status).not.toHaveBeenCalled();
+      expect(userDeletionService.adminDelete).toHaveBeenCalledWith(
+        targetUser,
+        'user-1',
+        request,
+      );
+      expect(userDeletionService.initiateSelfDeletion).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        id: 'user-2',
+        email: 'deleted-user-2@deleted.invalid',
+        photo: null,
+      });
+    });
+  });
+
+  describe('confirmDeletion', () => {
+    it('confirms self-deletion, clears auth cookies, and returns the anonymized profile', async () => {
+      const deletedUser = {
+        id: 'user-1',
+        email: 'deleted-user-1@deleted.invalid',
+        photo: null,
+      } as User;
+      userDeletionService.confirmSelfDeletion.mockResolvedValue(deletedUser);
+      const dto = { challengeId: 'challenge-1', code: '123456' };
+      const request = {} as FastifyRequest;
+      const reply = {};
+
+      const result = await controller.confirmDeletion(
+        'user-1',
+        dto,
+        request,
+        reply as unknown as FastifyReply,
+      );
+
+      expect(userDeletionService.confirmSelfDeletion).toHaveBeenCalledWith(
+        'user-1',
+        'challenge-1',
+        '123456',
+        request,
+      );
+      expect(authCookieService.clearAuthCookies).toHaveBeenCalledWith(reply);
+      expect(result).toEqual({
+        id: 'user-1',
+        email: 'deleted-user-1@deleted.invalid',
         photo: null,
       });
     });

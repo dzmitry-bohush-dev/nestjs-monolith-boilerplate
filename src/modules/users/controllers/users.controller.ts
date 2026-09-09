@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -22,14 +23,18 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import type { FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { AuditLogService } from '@/core/audit-log/audit-log.service';
+import { AuthCookieService } from '@/modules/auth/services/auth-cookie.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '@/modules/auth/types/jwt-payload.type';
 import { CheckProfileAccess } from '@/modules/users/decorators/check-profile-access.decorator';
+import { AccountDeletionPendingDto } from '@/modules/users/dtos/account-deletion-pending.dto';
+import { ConfirmAccountDeletionDto } from '@/modules/users/dtos/confirm-account-deletion.dto';
 import { ConfirmEmailChangeDto } from '@/modules/users/dtos/confirm-email-change.dto';
 import { EmailChangePendingDto } from '@/modules/users/dtos/email-change-pending.dto';
+import { InitiateAccountDeletionDto } from '@/modules/users/dtos/initiate-account-deletion.dto';
 import { InitiateEmailChangeDto } from '@/modules/users/dtos/initiate-email-change.dto';
 import { UpdateUserDto } from '@/modules/users/dtos/update-user.dto';
 import { UserProfileDto } from '@/modules/users/dtos/user-profile.dto';
@@ -40,6 +45,7 @@ import {
   UserProfileAccessGuard,
 } from '@/modules/users/guards/user-profile-access.guard';
 import { EmailChangeService } from '@/modules/users/services/email-change.service';
+import { UserDeletionService } from '@/modules/users/services/user-deletion.service';
 import { UsersService } from '@/modules/users/services/users.service';
 import { CurrentUser } from '@/shared/decorators/current-user.decorator';
 
@@ -52,6 +58,8 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly emailChangeService: EmailChangeService,
+    private readonly userDeletionService: UserDeletionService,
+    private readonly authCookieService: AuthCookieService,
     private readonly auditLogService: AuditLogService,
   ) {}
 
@@ -162,6 +170,81 @@ export class UsersController {
       dto.code,
       request,
     );
+
+    return UserProfileDto.from(user);
+  }
+
+  @Post(':userId/deletion')
+  @UseGuards(UserProfileAccessGuard)
+  @CheckProfileAccess('users', 'delete')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Delete a user account (self OTP or admin immediate)',
+  })
+  @ApiResponse({ status: 200, type: UserProfileDto })
+  @ApiResponse({
+    status: 202,
+    description: 'OTP confirmation required to complete self-deletion',
+    type: AccountDeletionPendingDto,
+  })
+  @ApiForbiddenResponse({ description: 'Insufficient permissions' })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiConflictResponse({ description: 'Deletion already in progress' })
+  @ApiTooManyRequestsResponse({ description: 'Resend cooldown not elapsed' })
+  async initiateDeletion(
+    @Body() dto: InitiateAccountDeletionDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Req()
+    request: FastifyRequest & {
+      targetUser: User;
+      profileAccessType: ProfileAccessType;
+    },
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<AccountDeletionPendingDto | UserProfileDto> {
+    if (request.profileAccessType === 'self') {
+      reply.status(HttpStatus.ACCEPTED);
+
+      return this.userDeletionService.initiateSelfDeletion(
+        request.targetUser,
+        dto.reason,
+        request,
+      );
+    }
+
+    const deleted = await this.userDeletionService.adminDelete(
+      request.targetUser,
+      currentUser.userId,
+      request,
+    );
+
+    return UserProfileDto.from(deleted);
+  }
+
+  @Post(':userId/deletion/confirm')
+  @UseGuards(SelfOnlyGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Confirm a pending account deletion with an OTP code',
+  })
+  @ApiResponse({ status: 200, type: UserProfileDto })
+  @ApiUnauthorizedResponse({
+    description: 'Invalid, expired, or already-used confirmation code',
+  })
+  async confirmDeletion(
+    @Param('userId') userId: string,
+    @Body() dto: ConfirmAccountDeletionDto,
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<UserProfileDto> {
+    const user = await this.userDeletionService.confirmSelfDeletion(
+      userId,
+      dto.challengeId,
+      dto.code,
+      request,
+    );
+
+    this.authCookieService.clearAuthCookies(reply);
 
     return UserProfileDto.from(user);
   }
