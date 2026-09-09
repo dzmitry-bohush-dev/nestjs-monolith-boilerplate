@@ -79,4 +79,12 @@ export const configValidationSchema = Joi.object<Config>({
   LOGIN_OTP_TTL_MS: Joi.number().optional().default(600000),
   LOGIN_OTP_MAX_ATTEMPTS: Joi.number().optional().default(5),
   LOGIN_OTP_RESEND_COOLDOWN_MS: Joi.number().optional().default(60000),
+
+  /**
+   * Email change OTP options
+   */
+  EMAIL_CHANGE_OTP_LENGTH: Joi.number().optional().default(6),
+  EMAIL_CHANGE_OTP_TTL_MS: Joi.number().optional().default(600000),
+  EMAIL_CHANGE_OTP_MAX_ATTEMPTS: Joi.number().optional().default(5),
+  EMAIL_CHANGE_OTP_RESEND_COOLDOWN_MS: Joi.number().optional().default(60000),
 });

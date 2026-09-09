@@ -1,6 +1,8 @@
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
+import { UpdateUserDto } from '@/modules/users/dtos/update-user.dto';
 import { User } from '@/modules/users/entities/user.entity';
 import { UsersService } from '@/modules/users/services/users.service';
 
@@ -99,6 +101,76 @@ describe('UsersService', () => {
       });
       expect(repository.save).toHaveBeenCalledWith(created);
       expect(result).toBe(saved);
+    });
+  });
+
+  describe('update', () => {
+    const buildUser = (overrides: Partial<User> = {}): User =>
+      ({
+        id: 'user-1',
+        email: 'current@example.com',
+        photo: null,
+        firstName: null,
+        lastName: null,
+        ...overrides,
+      }) as User;
+
+    it('throws ForbiddenException when a self update includes an email key', async () => {
+      const targetUser = buildUser();
+      const patch: UpdateUserDto = { email: 'current@example.com' };
+
+      await expect(
+        service.update(targetUser, patch, 'self'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when a permission update sets an email already taken by another user', async () => {
+      const targetUser = buildUser();
+      const patch: UpdateUserDto = { email: 'taken@example.com' };
+      repository.findOne.mockResolvedValue(
+        buildUser({ id: 'other-user', email: 'taken@example.com' }),
+      );
+
+      await expect(
+        service.update(targetUser, patch, 'permission'),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('updates and saves the user on a permission update with no conflict', async () => {
+      const targetUser = buildUser();
+      const patch: UpdateUserDto = {
+        email: 'new@example.com',
+        firstName: 'Jane',
+      };
+      repository.findOne.mockResolvedValue(null);
+      const saved = { ...targetUser, ...patch } as User;
+      repository.save.mockResolvedValue(saved);
+
+      const result = await service.update(targetUser, patch, 'permission');
+
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: { email: 'new@example.com' },
+      });
+      expect(repository.save).toHaveBeenCalledWith(
+        expect.objectContaining(patch),
+      );
+      expect(result).toBe(saved);
+    });
+
+    it('does not check for conflicts and saves as a no-op when email is unchanged', async () => {
+      const targetUser = buildUser({ email: 'current@example.com' });
+      const patch: UpdateUserDto = { email: 'current@example.com' };
+      repository.save.mockResolvedValue(targetUser);
+
+      const result = await service.update(targetUser, patch, 'permission');
+
+      expect(repository.findOne).not.toHaveBeenCalled();
+      expect(repository.save).toHaveBeenCalledWith(targetUser);
+      expect(result).toBe(targetUser);
     });
   });
 });

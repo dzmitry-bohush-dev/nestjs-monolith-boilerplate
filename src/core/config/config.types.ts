@@ -65,4 +65,12 @@ export interface Config {
   LOGIN_OTP_TTL_MS?: number;
   LOGIN_OTP_MAX_ATTEMPTS?: number;
   LOGIN_OTP_RESEND_COOLDOWN_MS?: number;
+
+  /**
+   * Email change OTP options
+   */
+  EMAIL_CHANGE_OTP_LENGTH?: number;
+  EMAIL_CHANGE_OTP_TTL_MS?: number;
+  EMAIL_CHANGE_OTP_MAX_ATTEMPTS?: number;
+  EMAIL_CHANGE_OTP_RESEND_COOLDOWN_MS?: number;
 }
