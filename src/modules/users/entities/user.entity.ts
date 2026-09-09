@@ -12,4 +12,10 @@ export class User extends BaseEntity {
 
   @Column({ type: 'varchar', nullable: true })
   photo!: string | null;
+
+  @Column({ type: 'varchar', name: 'first_name', nullable: true })
+  firstName!: string | null;
+
+  @Column({ type: 'varchar', name: 'last_name', nullable: true })
+  lastName!: string | null;
 }
