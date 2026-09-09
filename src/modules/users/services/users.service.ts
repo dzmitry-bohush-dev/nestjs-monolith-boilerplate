@@ -54,7 +54,11 @@ export class UsersService {
       }
     }
 
-    Object.assign(targetUser, patch);
+    for (const [key, value] of Object.entries(patch)) {
+      if (value !== undefined) {
+        (targetUser as unknown as Record<string, unknown>)[key] = value;
+      }
+    }
 
     return this.usersRepository.save(targetUser);
   }

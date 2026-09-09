@@ -114,7 +114,9 @@ export class UsersController {
       metadata: {
         targetUserId: userId,
         accessType: request.profileAccessType,
-        fields: Object.keys(dto),
+        fields: Object.entries(dto)
+          .filter(([, value]) => value !== undefined)
+          .map(([key]) => key),
       },
     });
 

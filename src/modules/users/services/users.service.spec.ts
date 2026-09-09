@@ -172,5 +172,25 @@ describe('UsersService', () => {
       expect(repository.save).toHaveBeenCalledWith(targetUser);
       expect(result).toBe(targetUser);
     });
+
+    it('does not overwrite fields with explicit undefined values from a class-transformed DTO', async () => {
+      // ValidationPipe({ transform: true }) uses class-transformer, which
+      // (by default) assigns `undefined` for every DTO field missing from
+      // the request body, rather than omitting the key entirely.
+      const targetUser = buildUser({
+        firstName: 'Existing',
+        lastName: 'Name',
+      });
+      const patch = Object.assign(new UpdateUserDto(), {
+        firstName: 'Jane',
+      }) as UpdateUserDto;
+      repository.save.mockImplementation((user: User) => Promise.resolve(user));
+
+      const result = await service.update(targetUser, patch, 'self');
+
+      expect(result.firstName).toBe('Jane');
+      expect(result.lastName).toBe('Name');
+      expect(result.email).toBe('current@example.com');
+    });
   });
 });

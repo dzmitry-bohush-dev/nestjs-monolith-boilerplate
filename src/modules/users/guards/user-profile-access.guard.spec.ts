@@ -142,5 +142,42 @@ describe('UserProfileAccessGuard', () => {
         }),
       );
     });
+
+    it('reads the profile:access metadata from the handler and class', async () => {
+      usersService.findById!.mockResolvedValue(targetUser);
+      rbacCacheService.hasPermission!.mockReturnValue(true);
+      const { context } = buildContext({ userId: 'user-2' }, currentUser);
+
+      await guard.canActivate(context);
+
+      expect(reflector.getAllAndOverride).toHaveBeenCalledWith(
+        'profile:access',
+        [context.getHandler(), context.getClass()],
+      );
+    });
+
+    it('checks the update permission when the update metadata is set', async () => {
+      reflector.getAllAndOverride!.mockReturnValue({
+        permission: 'users',
+        action: 'update',
+      });
+      usersService.findById!.mockResolvedValue(targetUser);
+      rbacCacheService.hasPermission!.mockReturnValue(true);
+      const { context, request } = buildContext(
+        { userId: 'user-2' },
+        currentUser,
+      );
+
+      const result = await guard.canActivate(context);
+
+      expect(result).toBe(true);
+      expect(rbacCacheService.hasPermission).toHaveBeenCalledWith(
+        'user-1',
+        'users',
+        'update',
+      );
+      expect(request.targetUser).toBe(targetUser);
+      expect(request.profileAccessType).toBe('permission');
+    });
   });
 });

@@ -243,6 +243,22 @@ describe('EmailChangeService', () => {
       expect(result.challengeId).toBe(pending.id);
     });
 
+    it('starts a new pending row when the only prior attempt is locked out (FAILED)', async () => {
+      // The lookup filters on status: 'PENDING', so a FAILED row from a prior
+      // lockout is invisible here and does not block a fresh initiate().
+      repository.findOne.mockResolvedValue(null);
+
+      const result = await service.initiate(user, 'new@example.com', request);
+
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: { userId: user.id, status: 'PENDING' },
+      });
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'PENDING' }),
+      );
+      expect(result.challengeId).toBe('attempt-1');
+    });
+
     it('treats a unique-violation on insert as an already-pending conflict', async () => {
       repository.findOne.mockResolvedValue(null);
       const driverError = Object.assign(new Error('duplicate key'), {
